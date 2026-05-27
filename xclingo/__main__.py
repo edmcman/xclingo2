@@ -102,12 +102,14 @@ def main():
         return 0
 
     clingo_flags = args.clingo_flags.split() if args.clingo_flags else []
+    only_last = args.only_last or args.n[0] == -1
+    n_solutions = '0' if args.n[0] == -1 else str(args.n[0])
     xControl = XclingoControl(
-        n_solutions=str(args.n[0]),
+        n_solutions=n_solutions,
         n_explanations=str(args.n[1]),
         auto_trace=args.auto_tracing,
         clingo_flags=clingo_flags,
-        only_last=args.only_last,
+        only_last=only_last,
     )
 
     combined_program = read_files_expanded(args.infiles)
