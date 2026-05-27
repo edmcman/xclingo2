@@ -161,13 +161,13 @@ class _FrozenModel:
 
 
 class XclingoControl:
-    def __init__(self, n_solutions='1', n_explanations='0', auto_trace='none'):
+    def __init__(self, n_solutions='1', n_explanations='0', auto_trace='none', clingo_flags=None):
         self.n_solutions = n_solutions
         self.n_explanations = n_explanations
 
         # Always enumerate all models (0); explain() limits output to n_solutions.
         # This ensures optimization programs run to proven optimality before explanation.
-        self.control = Control(['0'])
+        self.control = Control(['0'] + (clingo_flags or []))
         self.explainer = Explainer(
             [
                 n_explanations if type(n_explanations)==str else str(n_explanations), 

@@ -43,6 +43,7 @@ def check_options():
     parser.add_argument('--auto-tracing', type=str, choices=["none", "facts", "all"], default="none",
                         help="Automatically creates traces for the rules of the program. Default: none.")
     parser.add_argument('-n', nargs=2, default=(1,0), type=int, help="Number of answer sets and number of desired explanations (0=unlimited).")
+    parser.add_argument('--clingo-flags', type=str, default='', help="Extra flags passed to clingo (e.g. '--opt-strategy=bb,inc --heuristic=domain').")
     parser.add_argument('infiles', nargs='+', type=FileType('r'), default=sys.stdin, help="ASP program")
     return parser.parse_args()
 
@@ -98,10 +99,12 @@ def main():
         print(translate(program, args.auto_tracing))
         return 0
 
+    clingo_flags = args.clingo_flags.split() if args.clingo_flags else []
     xControl = XclingoControl(
         n_solutions=str(args.n[0]),
         n_explanations=str(args.n[1]),
         auto_trace=args.auto_tracing,
+        clingo_flags=clingo_flags,
     )
 
     combined_program = read_files_expanded(args.infiles)

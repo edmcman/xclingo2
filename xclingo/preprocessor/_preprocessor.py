@@ -136,6 +136,26 @@ class Preprocessor:
                         ),
                     )
 
+                elif lit.atom.ast_type == ast.ASTType.Aggregate:
+                    def _wrap_cond_lit_sup(e):
+                        inner = e.literal
+                        if (inner.ast_type == ast.ASTType.Literal
+                                and inner.sign == ast.Sign.NoSign
+                                and inner.atom.ast_type == ast.ASTType.SymbolicAtom):
+                            inner = ast.Literal(loc, inner.sign, ast.SymbolicAtom(
+                                ast.Function(loc, "_xclingo_model", [inner.atom.symbol], False)))
+                        return ast.ConditionalLiteral(loc, inner, list(self.sup_body(e.condition)))
+                    yield ast.Literal(
+                        loc,
+                        lit.sign,
+                        ast.Aggregate(
+                            loc,
+                            left_guard=lit.atom.left_guard,
+                            elements=[_wrap_cond_lit_sup(e) for e in lit.atom.elements],
+                            right_guard=lit.atom.right_guard,
+                        ),
+                    )
+
                 else:
                     yield lit
 
@@ -248,6 +268,31 @@ class Preprocessor:
                                 )
                                 for e in lit.atom.elements
                             ],
+                            right_guard=lit.atom.right_guard,
+                        ),
+                    )
+
+                elif lit.atom.ast_type == ast.ASTType.Aggregate:
+                    def _wrap_cond_lit_fbody(e):
+                        inner = e.literal
+                        if (inner.ast_type == ast.ASTType.Literal
+                                and inner.sign == ast.Sign.NoSign
+                                and inner.atom.ast_type == ast.ASTType.SymbolicAtom):
+                            inner = ast.Literal(loc, inner.sign, ast.SymbolicAtom(
+                                ast.Function(loc, "_xclingo_f_atom", [inner.atom.symbol], False)))
+                        elif (inner.ast_type == ast.ASTType.Literal
+                                and inner.sign != ast.Sign.NoSign
+                                and inner.atom.ast_type == ast.ASTType.SymbolicAtom):
+                            inner = ast.Literal(loc, ast.Sign.Negation, ast.SymbolicAtom(
+                                ast.Function(loc, "_xclingo_model", [inner.atom.symbol], False)))
+                        return ast.ConditionalLiteral(loc, inner, list(self.fbody_body(e.condition)))
+                    yield ast.Literal(
+                        loc,
+                        lit.sign,
+                        ast.Aggregate(
+                            loc,
+                            left_guard=lit.atom.left_guard,
+                            elements=[_wrap_cond_lit_fbody(e) for e in lit.atom.elements],
                             right_guard=lit.atom.right_guard,
                         ),
                     )
