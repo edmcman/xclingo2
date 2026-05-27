@@ -154,20 +154,12 @@ class Explainer():
         return self._get_explanations(control)
 
 
-class _FrozenModel:
-    """Holds atoms captured from a live Model so they can be explained after solve."""
-    def __init__(self, syms): self._syms = syms
-    def symbols(self, atoms=False, **_): return self._syms
-
-
 class XclingoControl:
-    def __init__(self, n_solutions='1', n_explanations='0', auto_trace='none', clingo_flags=None):
+    def __init__(self, n_solutions='1', n_explanations='1', auto_trace='none', clingo_flags=None):
         self.n_solutions = n_solutions
         self.n_explanations = n_explanations
 
-        # Always enumerate all models (0); explain() limits output to n_solutions.
-        # This ensures optimization programs run to proven optimality before explanation.
-        self.control = Control(['0'] + (clingo_flags or []))
+        self.control = Control([n_solutions if type(n_solutions)==str else str(n_solutions)] + (clingo_flags or []))
         self.explainer = Explainer(
             [
                 n_explanations if type(n_explanations)==str else str(n_explanations), 
@@ -215,36 +207,12 @@ class XclingoControl:
         Yields:
             Explation: a tree-like object that represents an explanation.
         """
-        n_limit = int(self.n_solutions)  # 0 = unlimited
-        n_explained = 0
-        opt_syms = None  # atoms from the last improving model (optimization only)
-
-        with self.control.solve(yield_=True) as handle:
-            for m in handle:
-                if m.cost:
-                    # Optimization program: save atoms from the current (best) model.
-                    # Model objects are invalidated when iteration advances, so we capture
-                    # the symbol list now and explain the final (optimal) model after the loop.
-                    opt_syms = list(m.symbols(atoms=True))
+        with self.control.solve(yield_=True) as it:
+            for m in it:
+                if on_explanation is None:
+                    yield self.explainer.explain(m, context=self._explainer_context)
                 else:
-                    # Plain SAT: explain immediately while the model is still live.
-                    expls = self.explainer.explain(m, context=self._explainer_context)
-                    if on_explanation is None:
-                        yield expls
-                    else:
-                        on_explanation(expls)
-                    n_explained += 1
-                    if n_limit and n_explained >= n_limit:
-                        handle.cancel()
-                        break
-
-        # For optimization programs, explain only the last (proven-optimal) model.
-        if opt_syms is not None:
-            expls = self.explainer.explain(_FrozenModel(opt_syms), context=self._explainer_context)
-            if on_explanation is None:
-                yield expls
-            else:
-                on_explanation(expls)
+                    on_explanation(self.explainer.explain(m, context=self._explainer_context))
 
     def _default_output(self):
         output = ''

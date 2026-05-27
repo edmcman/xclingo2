@@ -42,8 +42,8 @@ def check_options():
                         help="Prints the atoms used by the explainer to build the explanations.")
     parser.add_argument('--auto-tracing', type=str, choices=["none", "facts", "all"], default="none",
                         help="Automatically creates traces for the rules of the program. Default: none.")
-    parser.add_argument('-n', nargs=2, default=(1,0), type=int, help="Number of answer sets and number of desired explanations (0=unlimited).")
     parser.add_argument('--clingo-flags', type=str, default='', help="Extra flags passed to clingo (e.g. '--opt-strategy=bb,inc --heuristic=domain').")
+    parser.add_argument('-n', nargs=2, default=(1,1), type=int, help="Number of answer sets and number of desired explanations.")
     parser.add_argument('infiles', nargs='+', type=FileType('r'), default=sys.stdin, help="ASP program")
     return parser.parse_args()
 
