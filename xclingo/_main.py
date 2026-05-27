@@ -155,15 +155,16 @@ class Explainer():
 
 
 class XclingoControl:
-    def __init__(self, n_solutions='1', n_explanations='1', auto_trace='none', clingo_flags=None):
+    def __init__(self, n_solutions='1', n_explanations='1', auto_trace='none', clingo_flags=None, only_last=False):
         self.n_solutions = n_solutions
         self.n_explanations = n_explanations
+        self.only_last = only_last
 
         self.control = Control([n_solutions if type(n_solutions)==str else str(n_solutions)] + (clingo_flags or []))
         self.explainer = Explainer(
             [
-                n_explanations if type(n_explanations)==str else str(n_explanations), 
-            ], 
+                n_explanations if type(n_explanations)==str else str(n_explanations),
+            ],
             auto_trace=auto_trace
         )
 
@@ -207,12 +208,24 @@ class XclingoControl:
         Yields:
             Explation: a tree-like object that represents an explanation.
         """
-        with self.control.solve(yield_=True) as it:
-            for m in it:
-                if on_explanation is None:
-                    yield self.explainer.explain(m, context=self._explainer_context)
-                else:
-                    on_explanation(self.explainer.explain(m, context=self._explainer_context))
+        def _emit(expl):
+            if on_explanation is None:
+                yield expl
+            else:
+                on_explanation(expl)
+
+        if self.only_last:
+            last_expl = None
+            def on_last(m):
+                nonlocal last_expl
+                last_expl = self.explainer.explain(m, context=self._explainer_context)
+            self.control.solve(on_last=on_last)
+            if last_expl is not None:
+                yield from _emit(last_expl)
+        else:
+            with self.control.solve(yield_=True) as it:
+                for m in it:
+                    yield from _emit(self.explainer.explain(m, context=self._explainer_context))
 
     def _default_output(self):
         output = ''
