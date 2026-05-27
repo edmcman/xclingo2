@@ -42,12 +42,11 @@ def check_options():
                         help="Prints the atoms used by the explainer to build the explanations.")
     parser.add_argument('--auto-tracing', type=str, choices=["none", "facts", "all"], default="none",
                         help="Automatically creates traces for the rules of the program. Default: none.")
-    parser.add_argument('--clingo-flags', type=str, default='', help="Extra flags passed to clingo (e.g. '--opt-strategy=bb,inc --heuristic=domain').")
     parser.add_argument('-n', nargs=2, default=(1,1), type=int, help="Number of answer sets and number of desired explanations.")
     parser.add_argument('--only-last', action='store_true',
                         help="Only explain the last answer set (e.g., the optimal model).")
     parser.add_argument('infiles', nargs='+', type=FileType('r'), default=sys.stdin, help="ASP program")
-    return parser.parse_args()
+    return parser.parse_known_args()
 
 def read_files(files):
     return "\n".join([file.read() for file in files])
@@ -88,7 +87,7 @@ def print_text_explanations(xControl: XclingoControl):
 
 
 def main():
-    args = check_options()
+    args, clingo_flags = check_options()
 
     if args.only_translate_annotations:
         program = read_files_expanded(args.infiles)
@@ -101,7 +100,6 @@ def main():
         print(translate(program, args.auto_tracing))
         return 0
 
-    clingo_flags = args.clingo_flags.split() if args.clingo_flags else []
     only_last = args.only_last or args.n[0] == -1
     n_solutions = '0' if args.n[0] == -1 else str(args.n[0])
     xControl = XclingoControl(
