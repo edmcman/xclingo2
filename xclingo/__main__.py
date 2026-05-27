@@ -2,7 +2,30 @@ from xclingo import Explainer as Explainer
 from xclingo import XclingoControl
 from xclingo import __version__ as xclingo_version
 from argparse import ArgumentParser, FileType
+import os
+import re
 import sys
+
+_INCLUDE_RE = re.compile(r'^#include\s+"([^"]+)"\s*\.\s*$')
+
+def expand_includes(text, base_dir, visited=None):
+    """Recursively expand #include directives, preserving comments and annotations."""
+    if visited is None:
+        visited = set()
+    lines = text.split('\n')
+    result = []
+    for line in lines:
+        m = _INCLUDE_RE.match(line)
+        if m:
+            inc_path = os.path.normpath(os.path.join(base_dir, m.group(1)))
+            if inc_path not in visited:
+                visited.add(inc_path)
+                with open(inc_path) as f:
+                    inc_text = f.read()
+                result.append(expand_includes(inc_text, os.path.dirname(inc_path), visited))
+        else:
+            result.append(line)
+    return '\n'.join(result)
 
 def check_options():
     # Handles arguments of xclingo
@@ -26,13 +49,23 @@ def check_options():
 def read_files(files):
     return "\n".join([file.read() for file in files])
 
+def read_files_expanded(files):
+    """Read all files and recursively expand #include directives."""
+    parts = []
+    for f in files:
+        path = f.name
+        text = f.read()
+        base_dir = os.path.dirname(os.path.abspath(path)) if path else '.'
+        parts.append(expand_includes(text, base_dir))
+    return '\n'.join(parts)
+
 def translate(program, auto_trace):
     explainer = Explainer(auto_trace=auto_trace)
     explainer.add('base', [], program)
     explainer._translate_program()
     translation =  explainer._preprocessor.get_translation()
     translation += explainer._getExplainerLP(auto_trace=auto_trace)
-    return translation   
+    return translation
 
 def print_explanation_atoms(xControl: XclingoControl):
     n = 0
@@ -55,13 +88,13 @@ def main():
     args = check_options()
 
     if args.only_translate_annotations:
-        program = read_files(args.infiles)
+        program = read_files_expanded(args.infiles)
         from xclingo.preprocessor import Preprocessor
         print(Preprocessor.translate_annotations(program))
         return 0
 
     if args.only_translate:
-        program = read_files(args.infiles)
+        program = read_files_expanded(args.infiles)
         print(translate(program, args.auto_tracing))
         return 0
 
@@ -71,8 +104,8 @@ def main():
         auto_trace=args.auto_tracing,
     )
 
-    for file in args.infiles:
-        xControl.add("base", [], file.read())
+    combined_program = read_files_expanded(args.infiles)
+    xControl.add("base", [], combined_program)
 
     xControl.ground()
 

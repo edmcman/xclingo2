@@ -111,7 +111,7 @@ class Explainer():
         """
         if not self._translated:
             self._translate_program()
-            self._translated
+            self._translated = True
             
         with ProgramBuilder(control) as builder:
             parse_string(
