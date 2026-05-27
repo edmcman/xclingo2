@@ -13,6 +13,67 @@ from ._utils import (
     is_disyunctive_head,
 )
 from clingo import ast
+from clingo.ast import ASTSequence
+
+
+def _make_vars_safe(node, counter):
+    """Replace anonymous variables (_) with fresh named variables (_Xcl0, _Xcl1, ...).
+
+    When xclingo copies body literals into the head tuple (for _xclingo_sup /
+    _xclingo_fbody), anonymous variables become unsafe because they appear in
+    the head without being bound in the body of the transformed rule.  Replacing
+    them with named variables that are shared between head and body fixes this.
+    """
+    if node.ast_type == ast.ASTType.Variable:
+        if node.name == "_":
+            name = f"_Xcl{next(counter)}"
+            return ast.Variable(node.location, name)
+        return node
+
+    if node.ast_type == ast.ASTType.SymbolicTerm:
+        return node
+
+    # Reconstruct node with transformed children.
+    kwargs = {}
+    for key in node.child_keys:
+        child = getattr(node, key, None)
+        if child is None:
+            kwargs[key] = None
+        elif isinstance(child, ASTSequence) or isinstance(child, list):
+            kwargs[key] = [_make_vars_safe(item, counter) for item in child]
+        elif hasattr(child, "ast_type"):
+            kwargs[key] = _make_vars_safe(child, counter)
+        else:
+            kwargs[key] = child
+    return node.update(**kwargs)
+
+
+def _make_rule_safe(rule_ast):
+    """Make anonymous variables safe for xclingo by renaming them selectively.
+
+    Only renames _ in the head atom and in positive SymbolicAtom body literals
+    (the ones that propagates() copies into the head tuple).  Renaming _ in
+    negated literals or aggregates would create unsafe variables that only
+    appear in negated body literals.
+    """
+    counter = iter(range(100000))
+
+    # Rename _ in head
+    new_head = _make_vars_safe(rule_ast.head, counter)
+
+    # Rename _ only in positive SymbolicAtom body literals
+    new_body = []
+    for lit in rule_ast.body:
+        if (
+            lit.ast_type == ast.ASTType.Literal
+            and lit.sign == ast.Sign.NoSign
+            and lit.atom.ast_type == ast.ASTType.SymbolicAtom
+        ):
+            new_body.append(_make_vars_safe(lit, counter))
+        else:
+            new_body.append(lit)
+
+    return rule_ast.update(head=new_head, body=new_body)
 
 
 class Preprocessor:
@@ -309,6 +370,7 @@ class Preprocessor:
     def translate_rule(self, rule_ast):
         self.add_comment_to_translation(rule_ast)
         if rule_ast.ast_type == ast.ASTType.Rule and not is_constraint(rule_ast):
+            rule_ast = _make_rule_safe(rule_ast)
             if is_xclingo_label(rule_ast):
                 if is_label_rule(rule_ast):
                     self._last_trace_rule = rule_ast
