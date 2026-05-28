@@ -45,6 +45,8 @@ def check_options():
     parser.add_argument('-n', nargs=2, default=(1,1), type=int, help="Number of answer sets and number of desired explanations.")
     parser.add_argument('--only-last', action='store_true',
                         help="Only explain the last answer set (e.g., the optimal model).")
+    parser.add_argument('--show-trace', action='append', metavar='ATOM', default=[],
+                        help="Add a show_trace annotation for ATOM (e.g. 'sameClass(4,2).'). May be repeated.")
     parser.add_argument('infiles', nargs='+', type=FileType('r'), default=sys.stdin, help="ASP program")
     return parser.parse_known_args()
 
@@ -60,6 +62,13 @@ def read_files_expanded(files):
         base_dir = os.path.dirname(os.path.abspath(path)) if path else '.'
         parts.append(expand_includes(text, base_dir))
     return '\n'.join(parts)
+
+def inject_show_traces(program, atoms):
+    """Prepend %!show_trace directives for CLI-specified atoms."""
+    if not atoms:
+        return program
+    lines = '\n'.join(f'%!show_trace {a if a.endswith(".") else a + "."}' for a in atoms)
+    return lines + '\n' + program
 
 def translate(program, auto_trace):
     explainer = Explainer(auto_trace=auto_trace)
@@ -89,14 +98,14 @@ def print_text_explanations(xControl: XclingoControl):
 def main():
     args, clingo_flags = check_options()
 
+    program = inject_show_traces(read_files_expanded(args.infiles), args.show_trace)
+
     if args.only_translate_annotations:
-        program = read_files_expanded(args.infiles)
         from xclingo.preprocessor import Preprocessor
         print(Preprocessor.translate_annotations(program))
         return 0
 
     if args.only_translate:
-        program = read_files_expanded(args.infiles)
         print(translate(program, args.auto_tracing))
         return 0
 
@@ -110,8 +119,7 @@ def main():
         only_last=only_last,
     )
 
-    combined_program = read_files_expanded(args.infiles)
-    xControl.add("base", [], combined_program)
+    xControl.add("base", [], program)
 
     xControl.ground()
 
