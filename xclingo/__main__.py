@@ -121,6 +121,13 @@ def main():
 
     xControl.add("base", [], program)
 
+    if '&sameClass' in program:
+        try:
+            from propagator.sameclass import SameClassPropagator
+            xControl.control.register_propagator(SameClassPropagator())
+        except ImportError:
+            pass
+
     xControl.ground()
 
     if args.only_explanation_atoms:

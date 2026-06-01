@@ -61,13 +61,13 @@ def _make_rule_safe(rule_ast):
     # Rename _ in head
     new_head = _make_vars_safe(rule_ast.head, counter)
 
-    # Rename _ only in positive SymbolicAtom body literals
+    # Rename _ only in positive SymbolicAtom and TheoryAtom body literals
     new_body = []
     for lit in rule_ast.body:
         if (
             lit.ast_type == ast.ASTType.Literal
             and lit.sign == ast.Sign.NoSign
-            and lit.atom.ast_type == ast.ASTType.SymbolicAtom
+            and lit.atom.ast_type in (ast.ASTType.SymbolicAtom, ast.ASTType.TheoryAtom)
         ):
             new_body.append(_make_vars_safe(lit, counter))
         else:
@@ -92,9 +92,12 @@ class Preprocessor:
         return translate_trace_all(translate_show_all(translate_trace(translate_mute(program))))
 
     def propagates(self, lit_list):
+        loc = ast.Location(ast.Position("", 0, 0), ast.Position("", 0, 0))
         for lit in lit_list:
             if lit.sign == ast.Sign.NoSign and lit.atom.ast_type == ast.ASTType.SymbolicAtom:
                 yield lit
+            elif lit.sign == ast.Sign.NoSign and lit.atom.ast_type == ast.ASTType.TheoryAtom:
+                yield ast.Literal(loc, ast.Sign.NoSign, ast.SymbolicAtom(lit.atom.term))
 
     def sup_body(self, lit_list):
         loc = ast.Location(
@@ -153,6 +156,15 @@ class Preprocessor:
                             left_guard=lit.atom.left_guard,
                             elements=[_wrap_cond_lit_sup(e) for e in lit.atom.elements],
                             right_guard=lit.atom.right_guard,
+                        ),
+                    )
+
+                elif lit.atom.ast_type == ast.ASTType.TheoryAtom:
+                    yield ast.Literal(
+                        loc,
+                        lit.sign,
+                        ast.SymbolicAtom(
+                            ast.Function(loc, "_xclingo_model", [lit.atom.term], False)
                         ),
                     )
 
@@ -297,6 +309,24 @@ class Preprocessor:
                         ),
                     )
 
+                elif lit.atom.ast_type == ast.ASTType.TheoryAtom:
+                    if lit.sign == ast.Sign.NoSign:
+                        yield ast.Literal(
+                            loc,
+                            lit.sign,
+                            ast.SymbolicAtom(
+                                ast.Function(loc, "_xclingo_f_atom", [lit.atom.term], False)
+                            ),
+                        )
+                    else:
+                        yield ast.Literal(
+                            loc,
+                            ast.Sign.Negation,
+                            ast.SymbolicAtom(
+                                ast.Function(loc, "_xclingo_model", [lit.atom.term], False)
+                            ),
+                        )
+
                 else:
                     yield lit
             else:
@@ -410,11 +440,15 @@ class Preprocessor:
         self._translation += f"{a}\n"
 
     def add_comment_to_translation(self, a):
-        self._translation += f"% {a}\n"
+        self._translation += "\n".join(f"% {line}" for line in str(a).split("\n")) + "\n"
 
     def translate_rule(self, rule_ast):
         self.add_comment_to_translation(rule_ast)
-        if rule_ast.ast_type == ast.ASTType.Rule and not is_constraint(rule_ast):
+        if rule_ast.ast_type == ast.ASTType.TheoryDefinition:
+            self.add_to_translation(rule_ast)
+        elif rule_ast.ast_type == ast.ASTType.Rule and is_constraint(rule_ast):
+            self._last_trace_rule = None  # trace annotations don't apply to constraints
+        elif rule_ast.ast_type == ast.ASTType.Rule and not is_constraint(rule_ast):
             rule_ast = _make_rule_safe(rule_ast)
             if is_xclingo_label(rule_ast):
                 if is_label_rule(rule_ast):

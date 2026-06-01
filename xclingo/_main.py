@@ -2,11 +2,15 @@ from typing import Iterable, Sequence
 from clingo import Model, Function, String
 from clingo.ast import ProgramBuilder, parse_string
 from clingo.control import Control
-from clingo.symbol import SymbolType
+from clingo.symbol import SymbolType, Number
 from xclingo.explanation import Explanation
 from xclingo.preprocessor import Preprocessor
 
 from clingo.core import MessageCode
+
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.normpath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', '..')))
+from propagator.sameclass import sc_pairs_from_merges
 
 class Context:
     def label(self, text, tup):
@@ -123,7 +127,20 @@ class Explainer():
             for sym in model.symbols(atoms=True):
                 atm_id = backend.add_atom(Function('_xclingo_model', [sym], True))
                 backend.add_rule([atm_id], [], False)
-            
+
+            merges = [
+                (s.arguments[0], s.arguments[1])
+                for s in model.symbols(atoms=True)
+                if s.name == "mergeClasses" and len(s.arguments) == 2
+            ]
+            for a, b in sc_pairs_from_merges(merges):
+                sc_sym = Function("sameClass", [a, b], True)
+                mid = backend.add_atom(Function('_xclingo_model', [sc_sym], True))
+                backend.add_rule([mid], [], False)
+                fid = backend.add_atom(Function('_xclingo_fbody',
+                    [Number(0), sc_sym, Function("", [], True)], True))
+                backend.add_rule([fid], [], False)
+
         control.ground([('base', [])], context=context if context is not None else Context())
 
 
