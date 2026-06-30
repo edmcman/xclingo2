@@ -123,8 +123,9 @@ def main():
 
     if '&sameClass' in program:
         try:
-            from propagator.sameclass import SameClassPropagator
-            xControl.control.register_propagator(SameClassPropagator())
+            from ooanalyzer_sameclass import SameClassPropagator
+            # The Rust class registers both its observer and propagator in one call.
+            SameClassPropagator().register(xControl.control)
         except ImportError:
             pass
 
